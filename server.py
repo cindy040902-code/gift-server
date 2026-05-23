@@ -211,11 +211,11 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
     for search_keyword in search_keywords:
         enc_text = urllib.parse.quote(search_keyword)
 
-        # 가격 낮은 순으로 여러 페이지 훑기
+        # 정확도 순으로 여러 페이지 훑기
         for start in [1, 101, 201, 301]:
             url = (
                 "https://openapi.naver.com/v1/search/shop.json"
-                f"?query={enc_text}&display=100&start={start}&sort=asc"
+                f"?query={enc_text}&display=100&start={start}&sort=sim"
             )
 
             request = urllib.request.Request(url)
