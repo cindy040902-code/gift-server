@@ -195,7 +195,10 @@ def call_gemini_api(prompt: str):
 
 def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        print("❌ 네이버 키 없음")  # 추가
         return []
+
+    print(f"✅ 네이버 키 확인됨: ID={NAVER_CLIENT_ID[:5]}...")  # 추가
 
     # 검색 결과를 중복 없이 한 번 모아두기
     all_products = []
@@ -222,8 +225,10 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
             try:
                 response = urllib.request.urlopen(request, timeout=5)
                 rescode = response.getcode()
+                print(f"네이버 응답 코드: {rescode}")  # 추가
 
                 if rescode != 200:
+                    print(f"❌ 네이버 응답 실패: {rescode}")  # 추가
                     continue
 
                 response_body = response.read()
