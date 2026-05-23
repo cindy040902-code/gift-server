@@ -236,6 +236,8 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
                 search_results = data.get("items", [])
 
                 for product in search_results:
+                    current_price = int(product.get("lprice", 0))
+                    print(f"상품: {product.get('title', '')[:20]} | 가격: {current_price}원")  # 추가
                     link = product.get("link", "")
 
                     if link in seen_links:
@@ -276,6 +278,8 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
     for tolerance in [0.10, 0.30, 0.50]:
         allowed_min = min_budget * (1 - tolerance)
         allowed_max = max_budget * (1 + tolerance)
+        print(f"허용 범위 {int(tolerance * 100)}%: {allowed_min}원 ~ {allowed_max}원")  # 추가
+        print(f"전체 수집 상품 수: {len(all_products)}")  # 추가
 
         matched_products = []
 
