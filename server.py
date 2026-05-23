@@ -20,10 +20,6 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
-
-# 선택 사항: 서버 남용 방지용 간단 비밀값
-# .env에 APP_SECRET=원하는문자열 로 넣으면,
-# 클라이언트 요청 헤더에도 같은 값을 보내야 함.
 APP_SECRET = os.getenv("APP_SECRET")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -201,12 +197,15 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
         return []
 
-    price_floor = max(10000, min_budget * 0.5)
-
     filtered_products = []
     over_budget_products = []
     seen_links = set()
 
+    # 예산 오차 범위 ±10%
+    allowed_min = min_budget * 0.90
+    allowed_max = max_budget * 1.10
+
+    # 너무 좁은 키워드일 때 대비해서 보조 검색어도 함께 사용
     search_keywords = [
         keyword,
         f"{keyword} 선물",
@@ -216,64 +215,68 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
     for search_keyword in search_keywords:
         enc_text = urllib.parse.quote(search_keyword)
 
-        url = (
-            "https://openapi.naver.com/v1/search/shop.json"
-            f"?query={enc_text}&display=50&sort=sim"
-        )
+        # 가격 낮은 순으로 여러 페이지 훑기
+        for start in [1, 101, 201, 301]:
+            url = (
+                "https://openapi.naver.com/v1/search/shop.json"
+                f"?query={enc_text}&display=100&start={start}&sort=asc"
+            )
 
-        request = urllib.request.Request(url)
-        request.add_header("X-Naver-Client-Id", NAVER_CLIENT_ID)
-        request.add_header("X-Naver-Client-Secret", NAVER_CLIENT_SECRET)
+            request = urllib.request.Request(url)
+            request.add_header("X-Naver-Client-Id", NAVER_CLIENT_ID)
+            request.add_header("X-Naver-Client-Secret", NAVER_CLIENT_SECRET)
 
-        try:
-            response = urllib.request.urlopen(request, timeout=5)
-            rescode = response.getcode()
+            try:
+                response = urllib.request.urlopen(request, timeout=5)
+                rescode = response.getcode()
 
-            if rescode != 200:
-                continue
-
-            response_body = response.read()
-            data = json.loads(response_body.decode("utf-8"))
-            search_results = data.get("items", [])
-
-            for product in search_results:
-                link = product.get("link", "")
-
-                if link in seen_links:
+                if rescode != 200:
                     continue
 
-                seen_links.add(link)
+                response_body = response.read()
+                data = json.loads(response_body.decode("utf-8"))
+                search_results = data.get("items", [])
 
-                current_price = int(product.get("lprice", 0))
+                for product in search_results:
+                    link = product.get("link", "")
 
-                # main.py 기존 코드와 호환되도록 네이버 원본 키 이름 유지
-                item = {
-                    "title": product.get("title", ""),
-                    "link": product.get("link", ""),
-                    "image": product.get("image", ""),
-                    "lprice": str(current_price),
-                    "mallName": product.get("mallName", ""),
-                    "brand": product.get("brand", ""),
-                    "maker": product.get("maker", ""),
-                    "category1": product.get("category1", ""),
-                    "category2": product.get("category2", ""),
-                    "category3": product.get("category3", ""),
-                    "category4": product.get("category4", ""),
-                }
+                    if link in seen_links:
+                        continue
 
-                if price_floor <= current_price <= max_budget:
-                    filtered_products.append(item)
+                    seen_links.add(link)
 
-                elif current_price > max_budget:
-                    item["is_over_budget"] = True
-                    over_budget_products.append(item)
+                    current_price = int(product.get("lprice", 0))
 
-                if len(filtered_products) >= 3:
-                    return filtered_products[:3]
+                    # main.py 기존 코드와 호환되도록 네이버 원본 키 이름 유지
+                    item = {
+                        "title": product.get("title", ""),
+                        "link": product.get("link", ""),
+                        "image": product.get("image", ""),
+                        "lprice": str(current_price),
+                        "mallName": product.get("mallName", ""),
+                        "brand": product.get("brand", ""),
+                        "maker": product.get("maker", ""),
+                        "category1": product.get("category1", ""),
+                        "category2": product.get("category2", ""),
+                        "category3": product.get("category3", ""),
+                        "category4": product.get("category4", ""),
+                    }
 
-        except Exception as e:
-            print(f"네이버 API 연동 에러: {e}")
-            continue
+                    # 1순위: 예산 ±10% 범위
+                    if allowed_min <= current_price <= allowed_max:
+                        filtered_products.append(item)
+
+                    # 2순위: 예산 초과 fallback
+                    elif current_price > max_budget:
+                        item["is_over_budget"] = True
+                        over_budget_products.append(item)
+
+                    if len(filtered_products) >= 3:
+                        return filtered_products[:3]
+
+            except Exception as e:
+                print(f"네이버 API 연동 에러: {e}")
+                continue
 
     if filtered_products:
         return filtered_products[:3]
