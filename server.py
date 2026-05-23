@@ -264,8 +264,8 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
                         over_budget_products.append(over_item)
 
             except Exception as e:
-            print(f"네이버 API 연동 에러: {e}")
-            continue
+                print(f"네이버 API 연동 에러: {e}")
+                continue
 
     # 1순위: 예산 ±10%
     for tolerance in [0.10, 0.30, 0.50]:
@@ -289,18 +289,6 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
             return matched_products[:3]
 
     # 4순위: 그래도 없으면 예산 초과 상품
-    if over_budget_products:
-        return over_budget_products[:3]
-
-    return []
-
-
-    if filtered_products:
-        return filtered_products[:3]
-
-    if under_budget_products:
-        return under_budget_products[:3]
-
     if over_budget_products:
         return over_budget_products[:3]
 
