@@ -198,6 +198,7 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
         return []
 
     filtered_products = []
+    under_budget_products = []
     over_budget_products = []
     seen_links = set()
 
@@ -266,7 +267,12 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
                     if allowed_min <= current_price <= allowed_max:
                         filtered_products.append(item)
 
-                    # 2순위: 예산 초과 fallback
+                    # 2순위: 예산보다 조금 낮은 상품 fallback
+                    # 단, 너무 싼 상품은 제외
+                    elif min_budget * 0.5 <= current_price < allowed_min:
+                        under_budget_products.append(item)
+
+                    # 3순위: 예산 초과 fallback
                     elif current_price > max_budget:
                         item["is_over_budget"] = True
                         over_budget_products.append(item)
@@ -280,6 +286,9 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
 
     if filtered_products:
         return filtered_products[:3]
+
+    if under_budget_products:
+        return under_budget_products[:3]
 
     if over_budget_products:
         return over_budget_products[:3]
