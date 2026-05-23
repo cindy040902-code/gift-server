@@ -197,21 +197,13 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
         return []
 
-    filtered_products = []
-    under_budget_products = []
+    # 검색 결과를 중복 없이 한 번 모아두기
+    all_products = []
     over_budget_products = []
     seen_links = set()
 
-    # 예산 오차 범위 ±10%
-    allowed_min = min_budget * 0.90
-    allowed_max = max_budget * 1.10
-
     # 너무 좁은 키워드일 때 대비해서 보조 검색어도 함께 사용
-    search_keywords = [
-        keyword,
-        f"{keyword} 선물",
-        f"고급 {keyword}",
-    ]
+    search_keywords = [keyword, f"{keyword} 선물", f"고급 {keyword}", ]
 
     for search_keyword in search_keywords:
         enc_text = urllib.parse.quote(search_keyword)
@@ -263,26 +255,45 @@ def search_naver_shopping(keyword: str, min_budget: int, max_budget: int):
                         "category4": product.get("category4", ""),
                     }
 
-                    # 1순위: 예산 ±10% 범위
-                    if allowed_min <= current_price <= allowed_max:
-                        filtered_products.append(item)
+                    all_products.append(item)
 
-                    # 2순위: 예산보다 조금 낮은 상품 fallback
-                    # 단, 너무 싼 상품은 제외
-                    elif min_budget * 0.5 <= current_price < allowed_min:
-                        under_budget_products.append(item)
+                    # 예산 초과 fallback용
+                    if current_price > max_budget:
+                        over_item = item.copy()
+                        over_item["is_over_budget"] = True
+                        over_budget_products.append(over_item)
 
-                    # 3순위: 예산 초과 fallback
-                    elif current_price > max_budget:
-                        item["is_over_budget"] = True
-                        over_budget_products.append(item)
-
-                    if len(filtered_products) >= 3:
-                        return filtered_products[:3]
-
-            except Exception as e:
+                except Exception as e:
                 print(f"네이버 API 연동 에러: {e}")
                 continue
+
+    # 1순위: 예산 ±10%
+    for tolerance in [0.10, 0.30, 0.50]:
+        allowed_min = min_budget * (1 - tolerance)
+        allowed_max = max_budget * (1 + tolerance)
+
+        matched_products = []
+
+        for item in all_products:
+            current_price = int(item.get("lprice", 0))
+
+            if allowed_min <= current_price <= allowed_max:
+                # 10%, 30%, 50% 중 어떤 범위에서 잡혔는지 서버 내부 확인용
+                item["budget_tolerance"] = f"{int(tolerance * 100)}%"
+                matched_products.append(item)
+
+            if len(matched_products) >= 3:
+                return matched_products[:3]
+
+        if matched_products:
+            return matched_products[:3]
+
+    # 4순위: 그래도 없으면 예산 초과 상품
+    if over_budget_products:
+        return over_budget_products[:3]
+
+    return []
+
 
     if filtered_products:
         return filtered_products[:3]
